@@ -4,7 +4,7 @@ angular.module('ngSocketMock', []).
         closeQueue = [], pendingCloses = [],
         sendQueue = [], pendingSends = [];
 
-    function MockWebSocket (url) {};
+    function MockWebSocket (url) {}
     MockWebSocket.prototype.send = function (msg) {
       pendingSends.push(msg);
     };
@@ -93,6 +93,7 @@ angular.module('ngSocket', []).
         this.sendQueue = [];
         this.onOpenCallbacks = [];
         this.onMessageCallbacks = [];
+        this.fromJson = false;
         Object.freeze(this._readyStateConstants);
 
         this._connect();
@@ -118,7 +119,7 @@ angular.module('ngSocket', []).
 
       NGWebSocket.prototype._connect = function (force) {
         if (force || !this.socket || this.socket.readyState !== 1) {
-          this.socket = ngSocketBackend.createWebSocketBackend(this.url)
+          this.socket = ngSocketBackend.createWebSocketBackend(this.url);
           this.socket.onopen = this._onOpenHandler.bind(this);
           this.socket.onmessage = this._onMessageHandler.bind(this);
           this.socket.onclose = this._onCloseHandler.bind(this);
@@ -149,33 +150,53 @@ angular.module('ngSocket', []).
           throw new Error('Callback must be a function');
         }
 
-        if (options && typeof options.filter !== 'undefined' && typeof options.filter !== 'string' && !(options.filter instanceof RegExp)) {
-          throw new Error('Pattern must be a string or regular expression');
+        if (options && typeof options.filter !== 'undefined' && typeof options.filter !== 'string'
+            && !(options.filter instanceof RegExp) && typeof options.filter !== 'function') {
+          throw new Error('Pattern must be a string, function or regular expression');
         }
 
         this.onMessageCallbacks.push({
           fn: callback,
-          pattern: options? options.filter : undefined,
-          autoApply: options? options.autoApply : true
+          filter: options? options.filter : undefined,
+          autoApply: options? options.autoApply : true,
+          fromJson: options? options.fromJson : this.fromJson
         });
       };
 
       NGWebSocket.prototype._onMessageHandler = function (message) {
-        var pattern, socket = this;
+        var filter, jsonString, socket = this;
+
+        try {
+          jsonString = JSON.parse(message.data)
+        } catch (e) { }
+
         for (var i = 0; i < socket.onMessageCallbacks.length; i++) {
-          pattern = socket.onMessageCallbacks[i].pattern;
-          if (pattern) {
-            if (typeof pattern === 'string' && message.data === pattern) {
-              socket.onMessageCallbacks[i].fn.call(this, message);
+          var callbackMessage = socket.onMessageCallbacks[i].fromJson && jsonString ? jsonString : message;
+
+          if (socket.onMessageCallbacks[i].pattern) {
+            console.warn('The usage of "pattern" on message callbacks is deprecated, please use "filter"');
+            filter = socket.onMessageCallbacks[i].pattern;
+          }
+          else {
+            filter = socket.onMessageCallbacks[i].filter;
+          }
+
+          if (filter) {
+            if (typeof filter === 'string' && message.data === filter) {
+              socket.onMessageCallbacks[i].fn.call(this, callbackMessage);
               safeDigest();
             }
-            else if (pattern instanceof RegExp && pattern.exec(message.data)) {
-              socket.onMessageCallbacks[i].fn.call(this, message);
+            else if (filter instanceof RegExp && filter.exec(message.data)) {
+              socket.onMessageCallbacks[i].fn.call(this, callbackMessage);
+              safeDigest();
+            }
+            else if (typeof filter === 'function' && filter(message.data) === true) {
+              socket.onMessageCallbacks[i].fn.call(this, callbackMessage);
               safeDigest();
             }
           }
           else {
-            socket.onMessageCallbacks[i].fn.call(this, message);
+            socket.onMessageCallbacks[i].fn.call(this, callbackMessage);
             safeDigest();
           }
         }
