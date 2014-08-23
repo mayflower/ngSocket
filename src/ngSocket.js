@@ -272,7 +272,8 @@ angular.module('ngSocket', []).
       };
 
       NGWebSocket.prototype.reconnect = function () {
-
+        this.close();
+        this._connect();
       };
 
       NGWebSocket.prototype._setInternalState = function(state) {
