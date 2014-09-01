@@ -166,7 +166,7 @@ angular.module('ngSocket', []).
           fn: callback,
           filter: options? options.filter : undefined,
           autoApply: options? options.autoApply : true,
-          fromJson: options? options.fromJson : this.fromJson
+          fromJson: options && options.fromJson !== undefined? options.fromJson : this.fromJson
         });
       };
 
@@ -197,7 +197,7 @@ angular.module('ngSocket', []).
               socket.onMessageCallbacks[i].fn.call(this, callbackMessage);
               safeDigest();
             }
-            else if (typeof filter === 'function' && filter(message.data) === true) {
+            else if (typeof filter === 'function' && filter(callbackMessage) === true) {
               socket.onMessageCallbacks[i].fn.call(this, callbackMessage);
               safeDigest();
             }
